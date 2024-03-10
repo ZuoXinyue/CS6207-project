@@ -11,7 +11,12 @@ print('success loaded th model')
 question = "who holds the record in 100m freestyle"
 input_dict = tokenizer.prepare_seq2seq_batch(question, return_tensors="pt") 
 generated = model.generate(input_ids=input_dict["input_ids"]) 
-print('embeddings: ',tokenizer.batch_decode(generated, skip_special_tokens=True)[0]) 
+print('tokenizer: ',tokenizer.batch_decode(generated, skip_special_tokens=True)[0]) 
+
+
+outputs = model.question_encoder(input_ids=input_dict["input_ids"])[0]  # 获取问题编码器的输出
+embeddings = outputs  # 这里的outputs就是输入文本的嵌入表示
+print('embeddings: ',embeddings) 
 
 
 
