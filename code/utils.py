@@ -8,18 +8,25 @@ from torch.utils.data import DataLoader
 from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
 
 warnings.filterwarnings('ignore')
-def load_model(local_model_path: Union[str, None] = None) -> tuple[RagTokenizer, RagRetriever, RagTokenForGeneration]:
+def load_model(local_model_path: Union[str, None] = None, without_retriever: bool = False) -> Union[tuple[RagTokenizer, RagRetriever, RagTokenForGeneration], tuple[RagTokenizer, RagTokenForGeneration]]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # initial_dataset = torch.load("dataset/initial_dataset.pt")
+    
     tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-nq")
-    # retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", indexed_dataset=initial_dataset)  # 根据你的设置调整
-    model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq")
+    if without_retriever:
+        model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq")
+    else:
+        initial_dataset = torch.load("dataset/initial_dataset.pt")
+        retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", indexed_dataset=initial_dataset)  # 根据你的设置调整
+        model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq", retriever=retriever)
     if local_model_path:
         # load local parameters
         model.load_state_dict(torch.load(local_model_path))
     
     model.to(device)
-    return tokenizer, model
+    if without_retriever:
+        return tokenizer, model
+    else:
+        return tokenizer, retriever, model
     
 def get_embedding(input_text: Union[str, list[str]], tokenizer: RagTokenizer, model: RagTokenForGeneration) -> torch.Tensor:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,7 +66,7 @@ def database_embed(database_path: str, tokenizer: RagTokenizer, model: RagTokenF
     
     return Dataset.from_list(dataset)
 
-tokenizer, model = load_model()
-initial_dataset = database_embed("../database", tokenizer, model)  
-torch.save(initial_dataset, "../dataset/initial_retrieve_database.pt")
-    
+def make_initial_dataset():
+    tokenizer, model = load_model(without_retriever=True)
+    initial_dataset = database_embed("../database", tokenizer, model)  
+    torch.save(initial_dataset, "../dataset/initial_retrieve_database.pt")
