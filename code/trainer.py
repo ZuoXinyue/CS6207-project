@@ -16,9 +16,9 @@ from rag_hypers import RagHypers
 hypers = RagHypers().fill_from_args()
 
 tokenizer, model = hypers.get_tokenizer_and_model()
-print("loaded")
 
 model = model.to(hypers.device)
+print(hypers.device)
 optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_instances, model)
 
 
@@ -46,9 +46,10 @@ squad_processed = squad_dataset.map(preprocess_data, batched=True,batch_size=200
 
 
 def retrieve(encoded_queries, answers):
+
     labels = tokenizer(answers, padding=True, truncation=True, return_tensors="pt", max_length=512)["input_ids"].to(model.device)
     input_dict = tokenizer.prepare_seq2seq_batch(encoded_queries, return_tensors="pt") 
-
+    input_dict["input_ids"] = input_dict["input_ids"].to(model.device)
     question_hidden_states = model.question_encoder(input_ids=input_dict["input_ids"])[0]
     question_hidden_states_np = question_hidden_states.cpu().detach().numpy()
 
@@ -79,7 +80,6 @@ def train():
         answers = [answer[0] for answer in batch['answers']]  # only input the first answer
         # retrieve function 
         context_input_ids, context_attention_mask, doc_scores, input_ids, attention_mask, labels = retrieve(queries, answers)
-        print('out')
         model.train()
         outputs = model(input_ids=input_ids, 
                         attention_mask=attention_mask,
