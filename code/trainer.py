@@ -1,5 +1,4 @@
 import torch
-from transformers import RagConfig,RagTokenizer, RagRetriever, RagTokenForGeneration, Trainer, TrainingArguments,DataCollatorForSeq2Seq
 from datasets import load_dataset
 import faiss
 from transformer_optimize import TransformerOptimize
@@ -21,7 +20,8 @@ print("loaded")
 
 model = model.to(hypers.device)
 optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_instances, model)
-model.train()
+
+
 
 ##### load external database and FAISS index
 initial_dataset_path = "../dataset/initial_retrieve_database.pt"
@@ -30,30 +30,19 @@ init_dataset = torch.load(initial_dataset_path)
 context_embeddings = init_dataset['embeddings']
 context_embeddings = torch.Tensor(context_embeddings)
 num_texts, dim = context_embeddings.shape
+faissIndex = faiss.IndexFlatL2(dim)  # L2 distance calcutate similarity 
+faissIndex.add(context_embeddings.cpu().numpy())  
 
-faissIndex = faiss.IndexFlatL2(dim)  # L2距离用于向量相似性
-faissIndex.add(context_embeddings.cpu().numpy())  # 向索引中添加向量
-#文本数据
-texts = init_dataset['text']
 
-# 加载SQuAD数据集
+# load SQuAD dataset
 squad_dataset = load_dataset("squad", split='train')
-
-# 预处理SQuAD数据集
+# preprocess SQuAD dataset
 def preprocess_data(examples):
     inputs = tokenizer(examples['question'], padding='max_length', truncation=True, max_length=512, return_tensors='pt')
-    answers = [ans['text'][0] for ans in examples['answers']]  # 假设我们只关心第一个答案
+    answers = [ans['text'][0] for ans in examples['answers']]  # first answer
     labels = tokenizer(answers, padding='max_length', truncation=True, max_length=512, return_tensors='pt')['input_ids']
     return {'input_ids': inputs.input_ids, 'attention_mask': inputs.attention_mask, 'labels': labels}
-
 squad_processed = squad_dataset.map(preprocess_data, batched=True,batch_size=200)
-
-
-
-def prepare_Questions(batch):
-    # 准备数据，对问题进行编码等
-    inputs = tokenizer(batch['question'], padding=True, truncation=True, return_tensors="pt")
-    return inputs
 
 
 def retrieve(encoded_queries, answers):
@@ -83,17 +72,12 @@ def retrieve(encoded_queries, answers):
 
 
 
-
-# model_path = "facebook/rag-token-nq"
-# initial_dataset_path = "../dataset/initial_retrieve_database.pt"
 def train():
     progress_bar = tqdm(squad_processed, desc="Training")
     for batch in squad_processed:
-      
         queries = tokenizer.batch_decode(batch['input_ids'], skip_special_tokens=True)
-        # answers = tokenizer.batch_decode(batch['labels'], skip_special_tokens=True)
-        answers = [answer[0] for answer in batch['answers']]  # 假设我们只关心第一个答案
-        # 假设retrieve函数接受编码后的输入和标签，并返回所需的所有tensor
+        answers = [answer[0] for answer in batch['answers']]  # only input the first answer
+        # retrieve function 
         context_input_ids, context_attention_mask, doc_scores, input_ids, attention_mask, labels = retrieve(queries, answers)
         print('out')
         model.train()
