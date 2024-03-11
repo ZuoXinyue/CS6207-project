@@ -15,7 +15,7 @@ def load_model(local_model_path: Union[str, None] = None, without_retriever: boo
     if without_retriever:
         model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq")
     else:
-        initial_dataset = torch.load("dataset/initial_dataset.pt")
+        initial_dataset = torch.load("dataset/initial_retrieve_database.pt")
         retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", indexed_dataset=initial_dataset)  # 根据你的设置调整
         model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq", retriever=retriever)
     if local_model_path:
