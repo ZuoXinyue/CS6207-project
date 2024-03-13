@@ -3,24 +3,42 @@ from datasets import load_dataset
 import faiss
 from transformer_optimize import TransformerOptimize
 from tqdm.auto import tqdm
-"""
-Combine Retrieval + Generation -> improve the performance.
 
-Specifically,  when user raise a questions, 
-RAG first use the retriver query external
-database (a subset of Wikipedia) to fine the related document or text.
-And then the retrieved texts will be used as an cotext, help model generate more accuract answers.
-"""
+# from finetune_peft import get_peft_config, PEFTArguments
+from peft import (
+    get_peft_model,
+    LoraConfig,
+    TaskType,
+)
+target_modules = [
+    "question_encoder.question_encoder.bert_model.encoder.layer.0.attention.self.query",
+    # "question_encoder.question_encoder.bert_model.encoder.layer.*.attention.self.key",
+    # "question_encoder.question_encoder.bert_model.encoder.layer.*.attention.self.value",
+    ]
 
+peft_config = LoraConfig(
+            task_type=TaskType.SEQ_2_SEQ_LM, 
+            inference_mode=False,
+            r=4,
+            lora_alpha=32, 
+            lora_dropout=0.1,
+            target_modules=target_modules  # Specify target modules here
+        )
 from rag_hypers import RagHypers
 hypers = RagHypers().fill_from_args()
 
 tokenizer, model = hypers.get_tokenizer_and_model()
-
+model = get_peft_model(model, peft_config)
 model = model.to(hypers.device)
+
+
 print(hypers.device)
 optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_instances, model)
 
+model_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+model_size = model_parameters * 4  
+model_size_MB = model_size / (1024 * 1024) 
+print(f"model size: {model_size_MB:.2f} MB, Model parameters count: {model_parameters}")
 
 
 ##### load external database and FAISS index
@@ -36,18 +54,25 @@ faissIndex.add(context_embeddings.cpu().numpy())
 
 # load SQuAD dataset
 squad_dataset = load_dataset("squad", split='train')
+
+squad_dataset = squad_dataset.select(range(1))
+
+print('train: ', len(squad_dataset))
+squad_dataset_val = load_dataset("squad", split='validation')
 # preprocess SQuAD dataset
-def preprocess_data(examples):
-    inputs = tokenizer(examples['question'], padding='max_length', truncation=True, max_length=512, return_tensors='pt')
+MAX_LENGTH = 512
+print("MAX_LENGTH",MAX_LENGTH)
+def preprocess_data(examples,max_length=MAX_LENGTH):
+    inputs = tokenizer(examples['question'], padding='max_length', truncation=True, max_length=max_length, return_tensors='pt')
     answers = [ans['text'][0] for ans in examples['answers']]  # first answer
-    labels = tokenizer(answers, padding='max_length', truncation=True, max_length=512, return_tensors='pt')['input_ids']
+    labels = tokenizer(answers, padding='max_length', truncation=True, max_length=max_length, return_tensors='pt')['input_ids']
     return {'input_ids': inputs.input_ids, 'attention_mask': inputs.attention_mask, 'labels': labels}
-squad_processed = squad_dataset.map(preprocess_data, batched=True,batch_size=200)
+squad_processed = squad_dataset.map(preprocess_data, batched=True, batch_size=1)
 
 
 def retrieve(encoded_queries, answers):
 
-    labels = tokenizer(answers, padding=True, truncation=True, return_tensors="pt", max_length=512)["input_ids"].to(model.device)
+    labels = tokenizer(answers, padding=True, truncation=True, return_tensors="pt", max_length=MAX_LENGTH)["input_ids"].to(model.device)
     input_dict = tokenizer.prepare_seq2seq_batch(encoded_queries, return_tensors="pt") 
     input_dict["input_ids"] = input_dict["input_ids"].to(model.device)
     question_hidden_states = model.question_encoder(input_ids=input_dict["input_ids"])[0]
@@ -59,7 +84,7 @@ def retrieve(encoded_queries, answers):
     context_input_ids = []
     context_attention_mask = []
     for passage in passages:
-        encoded_passage = tokenizer(passage, padding='max_length', truncation=True, max_length=512, return_tensors='pt')
+        encoded_passage = tokenizer(passage, padding='max_length', truncation=True, max_length=MAX_LENGTH, return_tensors='pt')
         context_input_ids.append(encoded_passage['input_ids'].squeeze(0))  # 去掉批次维度
         context_attention_mask.append(encoded_passage['attention_mask'].squeeze(0))
 
@@ -81,6 +106,7 @@ def train():
         # retrieve function 
         context_input_ids, context_attention_mask, doc_scores, input_ids, attention_mask, labels = retrieve(queries, answers)
         model.train()
+        print(context_input_ids.shape, context_attention_mask.shape, doc_scores.shape, input_ids.shape, attention_mask.shape, labels.shape)
         outputs = model(input_ids=input_ids, 
                         attention_mask=attention_mask,
                         labels=labels, 

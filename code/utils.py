@@ -6,6 +6,10 @@ from typing import Union
 from datasets import Dataset
 from torch.utils.data import DataLoader
 from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
+from argparse import ArgumentParser
+from enum import Enum, EnumMeta
+import logging
+
 
 warnings.filterwarnings('ignore')
 def load_model(local_model_path: Union[str, None] = None, without_retriever: bool = False) -> Union[tuple[RagTokenizer, RagRetriever, RagTokenForGeneration], tuple[RagTokenizer, RagTokenForGeneration]]:
@@ -79,14 +83,9 @@ def make_initial_dataset():
     torch.save(initial_dataset, "../dataset/initial_retrieve_database.pt")
     
     
-    
-from argparse import ArgumentParser
-from enum import Enum, EnumMeta
-import logging
+
 
 logger = logging.getLogger(__name__)
-
-
 def fill_from_dict(defaults, a_dict):
     for arg, val in a_dict.items():
         d = defaults.__dict__[arg]

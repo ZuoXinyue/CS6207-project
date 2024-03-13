@@ -117,7 +117,7 @@ class HypersBase:
         # Setup CUDA, GPU
         if self.local_rank == -1 or self.no_cuda:
             # NOTE: changed "cuda" to "cuda:0"
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() and not self.no_cuda else "cpu")
+            self.device = torch.device("cuda:1" if torch.cuda.is_available() and not self.no_cuda else "cpu")
             self.n_gpu = torch.cuda.device_count()
         else:
             torch.cuda.set_device(self.local_rank)
@@ -215,7 +215,7 @@ class RagHypers(HypersBase):
     def __init__(self):
         super().__init__()
         self.kilt_data = ''
-        self.model_name = 'facebook/rag-token-nq'
+        self.model_name = 'facebook/rag-sequence-nq'
         self.model_path = ''
         self.no_leading_space = False
         self.n_docs = 5
@@ -229,4 +229,5 @@ class RagHypers(HypersBase):
         # initialize the model and index
         tokenizer = RagTokenizer.from_pretrained(self.model_name)
         model = RagTokenForGeneration.from_pretrained(self.model_path if self.model_path else self.model_name)
+        # model = RagSequenceForGeneration.from_pretrained(self.model_path if self.model_path else self.model_name)
         return tokenizer, model
