@@ -110,7 +110,7 @@ def train():
         context_input_ids, context_attention_mask, doc_scores, input_ids, attention_mask, labels = retrieve(queries, answers)
         model.train()
         print(context_input_ids.shape, context_attention_mask.shape, doc_scores.shape, input_ids.shape, attention_mask.shape, labels.shape)
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
         with autocast():
             outputs = model(input_ids=input_ids, 
                         attention_mask=attention_mask,
