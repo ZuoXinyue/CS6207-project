@@ -4,7 +4,7 @@ import warnings
 from tqdm import tqdm
 from typing import Union
 from datasets import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
 
 warnings.filterwarnings('ignore')
@@ -21,13 +21,9 @@ def load_model(local_model_path: Union[str, None] = None, without_retriever: boo
             model = RagTokenForGeneration.from_pretrained(local_model_path, retriever=retriever)
             
         else:
-            initial_dataset = torch.load("../dataset/initial_dataset.pt")
+            initial_dataset = torch.load("../dataset_embed/initial_dataset.pt")
             retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", indexed_dataset=initial_dataset)  # 根据你的设置调整
             model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq", retriever=retriever)
-            
-    # if local_model_path:
-    #     # load local parameters
-    #     model.load_state_dict(torch.load(local_model_path))
     
     model.to(device)
     if without_retriever:
@@ -73,19 +69,43 @@ def database_embed(database_path: str, tokenizer: RagTokenizer, model: RagTokenF
     
     return Dataset.from_list(dataset)
 
-def make_initial_dataset():
+def split_database(database: Dataset, bin_num: int) -> list[Dataset]:
+    num_samples = len(database)
+    bin_size = num_samples // bin_num
+    datasets = []
+    for i in range(bin_num):
+        start = i * bin_size
+        end = (i+1) * bin_size
+        if i == bin_num - 1:
+            end = num_samples
+        small_dataset = [database[idx] for idx in range(start, end)]
+        datasets.append(Dataset.from_list(small_dataset))
+    return datasets
+
+def load_from_split_database(split_database_path: str, database_name: str) -> Dataset:
+    # find all files start with database_name in split_database_path
+    file_names = [f for f in os.listdir(split_database_path) if f.startswith(database_name)]
+    file_names = sorted(file_names)
+    datasets = []
+    for file_name in file_names:
+        dataset = torch.load(os.path.join(split_database_path, file_name))
+        datasets.extend([dataset[idx] for idx in range(len(dataset))])
+    dataset = Dataset.from_list(datasets)
+    return dataset
+    
+def make_initial_database():
     tokenizer, model = load_model(without_retriever=True)
-    initial_dataset = database_embed("../database", tokenizer, model)  
-    torch.save(initial_dataset, "../dataset/initial_retrieve_database.pt")
-    
-    
+    initial_dataset = database_embed("../database_text", tokenizer, model)
+    # split dataset into 3 parts
+    split_databases = split_database(initial_dataset, 3)
+    for i, small_database in enumerate(split_databases):
+        torch.save(small_database, f"../database_embed/initial_retrieve_database_{i}.pt")
     
 from argparse import ArgumentParser
 from enum import Enum, EnumMeta
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 def fill_from_dict(defaults, a_dict):
     for arg, val in a_dict.items():

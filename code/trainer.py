@@ -13,6 +13,7 @@ And then the retrieved texts will be used as an cotext, help model generate more
 """
 
 from rag_hypers import RagHypers
+from utils import load_from_split_database
 hypers = RagHypers().fill_from_args()
 
 tokenizer, model = hypers.get_tokenizer_and_model()
@@ -24,8 +25,8 @@ optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_ins
 
 
 ##### load external database and FAISS index
-initial_dataset_path = "../dataset/initial_retrieve_database.pt"
-init_dataset = torch.load(initial_dataset_path)
+initial_dataset_path = "../database_embed"
+init_dataset = load_from_split_database(initial_dataset_path, "initial_retrieve_database")
 
 context_embeddings = init_dataset['embeddings']
 context_embeddings = torch.Tensor(context_embeddings)
