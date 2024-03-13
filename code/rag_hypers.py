@@ -215,7 +215,7 @@ class RagHypers(HypersBase):
     def __init__(self):
         super().__init__()
         self.kilt_data = ''
-        self.model_name = 'facebook/rag-sequence-nq'
+        self.model_name = 'facebook/rag-token-nq'
         self.model_path = ''
         self.no_leading_space = False
         self.n_docs = 5
