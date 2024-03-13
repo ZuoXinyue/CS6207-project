@@ -25,7 +25,7 @@ def crawl_wikipedia_page(name):
 
 
 if __name__ == '__main__':
-    dataset = load_dataset("squad")
+    dataset = load_dataset("rajpurkar/squad_v2")
     wiki_titles = []
     for key in dataset.keys():
         for sample in dataset[key]:
@@ -37,5 +37,5 @@ if __name__ == '__main__':
             wiki_content = crawl_wikipedia_page(title)
         except:
             continue
-        with open(f"../database/{title}.txt", "w") as f:
+        with open(f"../database_text/{title}.txt", "w") as f:
             f.write(wiki_content)

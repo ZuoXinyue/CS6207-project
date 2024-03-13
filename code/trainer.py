@@ -25,6 +25,7 @@ peft_config = LoraConfig(
             target_modules=target_modules  # Specify target modules here
         )
 from rag_hypers import RagHypers
+from utils import load_from_split_database
 hypers = RagHypers().fill_from_args()
 
 tokenizer, model = hypers.get_tokenizer_and_model()
@@ -42,8 +43,8 @@ print(f"model size: {model_size_MB:.2f} MB, Model parameters count: {model_param
 
 
 ##### load external database and FAISS index
-initial_dataset_path = "../dataset/initial_retrieve_database.pt"
-init_dataset = torch.load(initial_dataset_path)
+initial_dataset_path = "../database_embed"
+init_dataset = load_from_split_database(initial_dataset_path, "initial_retrieve_database")
 
 context_embeddings = init_dataset['embeddings']
 context_embeddings = torch.Tensor(context_embeddings)
