@@ -80,8 +80,8 @@ class HypersBase:
         self.seed = 42
         self.fp16 = False
         self.fp16_opt_level = 'O1'  # previous default was O2
-        self.full_train_batch_size = 8  # previous default was 32
-        self.per_gpu_eval_batch_size = 8
+        self.full_train_batch_size = 1  # previous default was 32
+        self.per_gpu_eval_batch_size = 1
         self.output_dir = ''  # where to save model
         self.save_total_limit = 1  # limit to number of checkpoints saved in the output dir
         self.save_steps = 0  # do we save checkpoints every N steps? (TODO: put in terms of hours instead)

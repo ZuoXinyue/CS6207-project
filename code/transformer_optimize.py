@@ -93,7 +93,7 @@ class TransformerOptimize:
     def should_continue(self):
         return self.global_step < self.t_total
 
-    def backward_on_loss(self, loss, **moving_averages):
+    def backward_on_loss(self, loss):
         if self.hypers.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
         loss_val = loss.item()
@@ -104,7 +104,7 @@ class TransformerOptimize:
                 scaled_loss.backward()
         else:
             loss.backward()
-        self.reporting.moving_averages(loss=loss_val, **moving_averages)
+        # self.reporting.moving_averages(loss=loss_val, **moving_averages)
         return loss_val
 
     def optimizer_step(self):
@@ -131,8 +131,8 @@ class TransformerOptimize:
             logger.info(f'{inst_count/self.reporting.elapsed_seconds()} instances per second ({learning_rate_scalar} learn rate)')
         return True
 
-    def step_loss(self, loss, **moving_averages):
-        loss_val = self.backward_on_loss(loss, **moving_averages)
+    def step_loss(self, loss):
+        loss_val = self.backward_on_loss(loss)
         if self.optimizer_step():
             return loss_val
         else:
