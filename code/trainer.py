@@ -18,7 +18,7 @@ from transformers import (
 
 BATCH_SIZE=1
 N_DOCS = 5
-MAX_LENGTH = 30
+MAX_LENGTH = 128
 COMBINED_MAX = 300
 
 ####### lora Setting
@@ -41,17 +41,16 @@ from rag_hypers import RagHypers
 from utils import load_from_split_database
 hypers = RagHypers().fill_from_args()
 tokenizer, model = hypers.get_tokenizer_and_model()
-model = get_peft_model(model, peft_config)
+# model = get_peft_model(model, peft_config)
 model = model.to(hypers.device)
-optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_instances, model)
 model.config.question_encoder.max_position_embeddings = MAX_LENGTH  # 限制生成回答的长度
+optimizer = TransformerOptimize(hypers, hypers.num_train_epochs * hypers.num_instances, model)
 
-
-print('device',hypers.device)
-model_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-model_size = model_parameters * 4  
-model_size_MB = model_size / (1024 * 1024) 
-print(f"model size: {model_size_MB:.2f} MB, Model parameters count: {model_parameters}")
+# print('device',hypers.device)
+# model_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+# model_size = model_parameters * 4  
+# model_size_MB = model_size / (1024 * 1024) 
+# print(f"model size: {model_size_MB:.2f} MB, Model parameters count: {model_parameters}")
 
 
 ##### load external database and FAISS index
@@ -70,7 +69,7 @@ faissIndex.add(context_embeddings.cpu().numpy())
 
 ####### load SQuAD dataset
 squad_dataset = load_dataset("squad", split='train')
-squad_dataset = squad_dataset.select(range(1))
+squad_dataset = squad_dataset.select(range(100))
 squad_dataset_val = load_dataset("squad", split='validation')
 # preprocess SQuAD dataset
 def preprocess_data(examples,max_length=MAX_LENGTH):
@@ -82,12 +81,10 @@ squad_processed = squad_dataset.map(preprocess_data, batched=True, batch_size=BA
 #######
 
 def retrieve(input_ids, attention_mask):
-    question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
-    print(question_hidden_states.shape)
+    question_hidden_states = optimizer.model.module.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
     question_hidden_states_np = question_hidden_states.cpu().detach().numpy()
     
     D, I = faissIndex.search(question_hidden_states_np,N_DOCS)  # n_docs the document number
-    print('D, I',D.shape, I.shape)
 
     context_input_ids = []
     context_attention_mask = []
@@ -114,32 +111,30 @@ def retrieve(input_ids, attention_mask):
 
 def train():
     optimizer.model.train()
-    progress_bar = tqdm(squad_processed, desc="Training")
-    for batch in squad_processed:
-        #### load input_ids, attention_mask, labels from training data
-        input_ids = torch.tensor(batch['input_ids'], dtype=torch.long).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
-        attention_mask = torch.Tensor(batch['attention_mask']).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
-        labels = torch.tensor(batch['labels'], dtype=torch.long).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
+    for epoch in range(10):
+        progress_bar = tqdm(squad_processed, desc="Epoch {} Training".format(epoch))
+        for batch in squad_processed:
+            #### load input_ids, attention_mask, labels from training data
+            input_ids = torch.tensor(batch['input_ids'], dtype=torch.long).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
+            attention_mask = torch.Tensor(batch['attention_mask']).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
+            labels = torch.tensor(batch['labels'], dtype=torch.long).reshape(BATCH_SIZE, MAX_LENGTH).to(model.device)
 
-        ##### start retrive ######
-        context_input_ids, context_attention_mask, doc_scores = retrieve(input_ids, attention_mask)
-        outputs = model(input_ids=input_ids, 
-                        attention_mask=attention_mask,
-                        labels=labels, 
-                        context_input_ids=context_input_ids, 
-                        context_attention_mask=context_attention_mask,
-                        doc_scores=doc_scores)
-            
-        print('loss',outputs.loss)
-        outputs.loss.requires_grad = True
-        print("outputs.loss.requires_grad",outputs.loss.requires_grad)
-        # outputs.loss.mean().backward()
-        optimizer.step_loss(outputs.loss.mean())
-        # loss = outputs.loss
-        # scaler.scale(loss).backward()  # 使用 GradScaler 来缩放损失，然后进行反向传播
-        # scaler.step(optimizer)  # 使用 GradScaler 来执行优化器的步骤
-        # scaler.update()  # 更新 GradScaler
-        # # optimizer.step()
-        progress_bar.set_postfix({'loss': outputs.loss.item()})
+            ##### start retrive ######
+            context_input_ids, context_attention_mask, doc_scores = retrieve(input_ids, attention_mask)
+            outputs = optimizer.model.module(input_ids=input_ids, 
+                            attention_mask=attention_mask,
+                            labels=labels, 
+                            context_input_ids=context_input_ids, 
+                            context_attention_mask=context_attention_mask,
+                            doc_scores=doc_scores)
+            # outputs.loss.mean().backward()
+            optimizer.step_loss(outputs.loss.mean())
+            # loss = outputs.loss
+            # scaler.scale(loss).backward()  # 使用 GradScaler 来缩放损失，然后进行反向传播
+            # scaler.step(optimizer)  # 使用 GradScaler 来执行优化器的步骤
+            # scaler.update()  # 更新 GradScaler
+            # # optimizer.step()
+            progress_bar.update(1)
+            progress_bar.set_postfix({'loss': outputs.loss.item()})
 
 train()

@@ -109,7 +109,7 @@ class TransformerOptimize:
 
     def optimizer_step(self):
         if self.global_step >= self.t_total:
-            logger.warning(f'Warning, exceeded total steps! {self.global_step} step of {self.t_total}')
+            # logger.warning(f'Warning, exceeded total steps! {self.global_step} step of {self.t_total}')
             return False
         if (self.step + 1) % self.hypers.gradient_accumulation_steps == 0:
             if self.hypers.max_grad_norm > 0:

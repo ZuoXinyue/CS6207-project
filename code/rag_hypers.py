@@ -221,7 +221,7 @@ class RagHypers(HypersBase):
         self.n_docs = 5
         self.fold = ''  # {1-n}of{n}
         # only used for train
-        self.num_instances = -1
+        self.num_instances = 1
         self.warmup_fraction = 0.1
         
 
