@@ -3,7 +3,9 @@ from datasets import load_dataset
 import faiss
 from transformer_optimize import TransformerOptimize
 from tqdm.auto import tqdm
+from torch.cuda.amp import autocast, GradScaler 
 
+scaler = GradScaler()
 # from finetune_peft import get_peft_config, PEFTArguments
 from peft import (
     get_peft_model,
@@ -108,17 +110,21 @@ def train():
         context_input_ids, context_attention_mask, doc_scores, input_ids, attention_mask, labels = retrieve(queries, answers)
         model.train()
         print(context_input_ids.shape, context_attention_mask.shape, doc_scores.shape, input_ids.shape, attention_mask.shape, labels.shape)
-        outputs = model(input_ids=input_ids, 
+        optimizer.zero_grad()
+        with autocast():
+            outputs = model(input_ids=input_ids, 
                         attention_mask=attention_mask,
                         labels=labels, 
                         context_input_ids=context_input_ids, 
                         context_attention_mask=context_attention_mask,
                         doc_scores=doc_scores)
+            loss = outputs.loss
         print('out2')
-        
-        optimizer.zero_grad()
-        outputs.loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+
+        # outputs.loss.backward()
+        scaler.update()
+        # optimizer.step()
         progress_bar.set_postfix({'loss': outputs.loss.item()})
 
 train()

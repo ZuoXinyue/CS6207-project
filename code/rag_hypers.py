@@ -117,7 +117,7 @@ class HypersBase:
         # Setup CUDA, GPU
         if self.local_rank == -1 or self.no_cuda:
             # NOTE: changed "cuda" to "cuda:0"
-            self.device = torch.device("cuda:1" if torch.cuda.is_available() and not self.no_cuda else "cpu")
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() and not self.no_cuda else "cpu")
             self.n_gpu = torch.cuda.device_count()
         else:
             torch.cuda.set_device(self.local_rank)
