@@ -97,11 +97,6 @@ def load_from_split_database(split_database_path: str, database_name: str) -> Da
     dataset = Dataset.from_list(datasets)
     return dataset
     
-<<<<<<< HEAD
-
-
-logger = logging.getLogger(__name__)
-=======
 def make_initial_database():
     tokenizer, model = load_model(without_retriever=True)
     initial_dataset = database_embed("../database_text", tokenizer, model)
@@ -116,7 +111,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
->>>>>>> 9fb6efeda00e34c433a5f3c0faf027f10a9b907d
 def fill_from_dict(defaults, a_dict):
     for arg, val in a_dict.items():
         d = defaults.__dict__[arg]
