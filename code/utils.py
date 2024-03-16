@@ -1,5 +1,6 @@
 import os
 import torch
+import faiss
 import warnings
 from tqdm import tqdm
 from typing import Union
@@ -10,30 +11,71 @@ from argparse import ArgumentParser
 from enum import Enum, EnumMeta
 import logging
 
-
 warnings.filterwarnings('ignore')
-def load_model(local_model_path: Union[str, None] = None, without_retriever: bool = False) -> Union[tuple[RagTokenizer, RagRetriever, RagTokenForGeneration], tuple[RagTokenizer, RagTokenForGeneration]]:
+
+def load_args():
+    parser = ArgumentParser()
+    
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="The device to run the model")
+    parser.add_argument("--model_name", type=str, default="facebook/rag-token-nq", help="The name of the model")
+    parser.add_argument('--dataset_name', type=str, default="rajpurkar/squad_v2", help="The name of dataset from huggingface")
+    parser.add_argument('--vec_database_path', type=str, default="../database_embed", help="The path of the vectorized database")
+    parser.add_argument("--init_database_name", type=str, default="initial_retrieve_database", help="The name of the initial database")
+    parser.add_argument("--batch_size", type=int, default=1, help="The batch size for training")
+    parser.add_argument("--n_docs", type=int, default=5, help="The number of documents to retrieve")
+    parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
+    parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
+    parser.add_argument("--learning_rate", type=float, default=1e-5, help="The learning rate for training")
+    parser.add_argument("--epoch_num", type=int, default=10, help="The number of epochs for training")
+    parser.add_argument("--debug_model", type=bool, default=True, help="Whether to use a debug model")
+    
+    
+    
+    args = parser.parse_args()
+    return args
+
+def clean(dataset):
+    new_dataset = []
+    for i in range(len(dataset)):
+        try:
+            if type(dataset[i]["answers"]["text"][0]) is str:
+                new_dataset.append(dataset[i])
+        except:
+            continue
+            
+    return new_dataset
+
+def dataset_2_dataloader(dataset, tokenizer, shuffle: bool, args: ArgumentParser) -> DataLoader:
+    tensor_dataset_input = tokenizer([sample["question"] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_input_length, return_tensors='pt')
+    
+    tensor_dataset_output = tokenizer([sample["answers"]["text"][0] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_output_length, return_tensors='pt')
+    
+    dataset = []
+    for i in range(len(tensor_dataset_input["input_ids"])):
+        dataset.append([
+            tensor_dataset_input["input_ids"][i],
+            tensor_dataset_input["attention_mask"][i],
+            tensor_dataset_output["input_ids"][i]
+        ])
+    
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=shuffle)
+    return dataloader
+
+def index_database(embeddings: torch.tensor): 
+    _, dim = embeddings.shape
+    faissIndex = faiss.IndexFlatL2(dim)  # L2 distance calcutate similarity 
+    faissIndex.add(embeddings.cpu().numpy()) 
+    return faissIndex
+
+def load_model(args: ArgumentParser) -> tuple[RagTokenizer, RagTokenForGeneration]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    tokenizer = RagTokenizer.from_pretrained("facebook/rag-token-nq")
-    if without_retriever:
-        model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq")
-    else:
-        if local_model_path:
-            tokenizer = RagTokenizer.from_pretrained(local_model_path)
-            retriever = RagRetriever.from_pretrained(local_model_path, index_name="exact", use_dummy_dataset=True)  # 根据你的设置调整
-            model = RagTokenForGeneration.from_pretrained(local_model_path, retriever=retriever)
-            
-        else:
-            initial_dataset = torch.load("../dataset_embed/initial_dataset.pt")
-            retriever = RagRetriever.from_pretrained("facebook/rag-token-nq", indexed_dataset=initial_dataset)  # 根据你的设置调整
-            model = RagTokenForGeneration.from_pretrained("facebook/rag-token-nq", retriever=retriever)
+    model = RagTokenForGeneration.from_pretrained(args.model_name)
+    tokenizer = RagTokenizer.from_pretrained(args.model_name)
     
     model.to(device)
-    if without_retriever:
-        return tokenizer, model
-    else:
-        return tokenizer, retriever, model
+
+    return tokenizer, model
     
 def get_embedding(input_text: Union[str, list[str]], tokenizer: RagTokenizer, model: RagTokenForGeneration) -> torch.Tensor:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -104,12 +146,6 @@ def make_initial_database():
     split_databases = split_database(initial_dataset, 3)
     for i, small_database in enumerate(split_databases):
         torch.save(small_database, f"../database_embed/initial_retrieve_database_{i}.pt")
-    
-from argparse import ArgumentParser
-from enum import Enum, EnumMeta
-import logging
-
-logger = logging.getLogger(__name__)
 
 def fill_from_dict(defaults, a_dict):
     for arg, val in a_dict.items():
@@ -122,7 +158,6 @@ def fill_from_dict(defaults, a_dict):
             defaults.__dict__[arg] = d[val]
         else:
             defaults.__dict__[arg] = val
-
 
 def fill_from_args(defaults):
     """
