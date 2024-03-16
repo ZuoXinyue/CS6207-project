@@ -48,7 +48,12 @@ def clean(dataset):
 def dataset_2_dataloader(dataset, tokenizer, shuffle: bool, args: ArgumentParser) -> DataLoader:
     tensor_dataset_input = tokenizer([sample["question"] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_input_length, return_tensors='pt')
     
-    tensor_dataset_output = tokenizer([sample["answers"]["text"][0] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_output_length, return_tensors='pt')
+    tensor_dataset_output = tokenizer.generator([sample["answers"]["text"][0] for sample in dataset], 
+                                      padding='max_length', 
+                                      truncation=True, 
+                                    #   add_special_tokens=True,
+                                      max_length=args.max_output_length, 
+                                      return_tensors='pt')
     
     dataset = []
     for i in range(len(tensor_dataset_input["input_ids"])):
