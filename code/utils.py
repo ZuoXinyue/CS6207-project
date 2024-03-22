@@ -28,6 +28,8 @@ def load_args():
     parser.add_argument("--learning_rate", type=float, default=1e-5, help="The learning rate for training")
     parser.add_argument("--epoch_num", type=int, default=10, help="The number of epochs for training")
     parser.add_argument("--debug_model", type=bool, default=True, help="Whether to use a debug model")
+    parser.add_argument("--input_dim", type=int, default=768, help="The input dimension of the autoencoder")
+    parser.add_argument("--latent_dim", type=int, default=128, help="The latent dimension of the autoencoder")
     
     
     

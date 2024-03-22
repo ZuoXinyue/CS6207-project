@@ -3,8 +3,9 @@ import logging
 
 from datasets import load_dataset
 from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean
-from trainer import train_RAG
+from trainer import train_RAG, val_RAG
 from transformers import AdamW
+from autoencoder import Autoencoder
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -37,10 +38,15 @@ def main():
     dataloader_train = dataset_2_dataloader(dataset_train, tokenizer, True, args)
     dataloader_val = dataset_2_dataloader(dataset_val, tokenizer, False, args)
     
+    # load autoencoder
+    autoencoder = Autoencoder(args.input_dim, args.latent_dim, args.device)
     for epoch in range(args.epoch_num):
         # 1. Train a RAG langauge model
         train_RAG(dataloader_train, model, tokenizer, optimizer, epoch, corpus, faissIndex, args)
+        val_RAG(dataloader_val, model, tokenizer, epoch, corpus, faissIndex, args)
+        
         # 2. Train an auto-encoder
+        autoencoder.train_model(dataloader_train, dataloader_val, model, epoch, args)
         
         # 3. Update database
     
