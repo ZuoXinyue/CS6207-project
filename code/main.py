@@ -32,20 +32,11 @@ def main():
     
     # embeddings = torch.tensor(database['embeddings'])
     # faissIndex = index_database(embeddings)
-    faissIndex = index_database(torch.tensor(database['embeddings']))
     
     embeddings = torch.tensor(database['embeddings']).numpy()
     # Clustering embeddings
-    kmeans, cluster_centers, cluster_assignments, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
-    
-    def add_cluster_assignments(example, idx):
-    # `idx` is the index of the example, used to fetch the corresponding cluster assignment
-        return {'cluster_assignment': cluster_assignments[idx]}
-    # database['cluster_assignments'] = cluster_assignments.flatten()  # Assuming 1D array for simplicity
-    database = database.map(add_cluster_assignments, with_indices=True)
+    cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
-    
-    faissIndex = index_database(torch.tensor(database['embeddings']))
     
     # load dataset
     dataset_train = clean(load_dataset(args.dataset_name, split='train[:500]' if args.debug_model else 'train'))
@@ -62,8 +53,8 @@ def main():
     autoencoder = Autoencoder(args.input_dim, args.latent_dim, args.device)
     for epoch in range(args.epoch_num):
         # 1. Train a RAG langauge model
-        train_RAG(dataloader_train, model, tokenizer, optimizer, epoch, corpus, faissIndex, cluster_centers, cluster_assignments, indexes, cluster_global_indices, args)
-        val_RAG(dataloader_val, model, tokenizer, epoch, corpus, faissIndex, args)
+        train_RAG(dataloader_train, model, tokenizer, optimizer, epoch, corpus, cluster_centers, indexes, cluster_global_indices, args)
+        val_RAG(dataloader_val, model, tokenizer, epoch, corpus, args)
         
         # 2. Train an auto-encoder
         autoencoder.train_model(dataloader_train, dataloader_val, model, epoch, args)

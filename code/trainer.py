@@ -19,7 +19,7 @@ from transformers import (
 )
 #######
 
-def retrieve(query_embedding, tokenizer, corpus, faissIndex, cluster_centers, cluster_assignments,indexes,cluster_global_indices,args):
+def retrieve(query_embedding, tokenizer, corpus, cluster_centers,indexes,cluster_global_indices,args):
     
     batch_size = args.batch_size
     question_hidden_states_np = query_embedding.cpu().detach().numpy()
@@ -66,14 +66,14 @@ def retrieve(query_embedding, tokenizer, corpus, faissIndex, cluster_centers, cl
             context_attention_mask.to(args.device), \
             doc_scores \
 
-def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, faissIndex, cluster_centers, cluster_assignments, indexes,cluster_global_indices,args):
+def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
     model.train()
     progress_bar = tqdm(dataloader, desc="Epoch {} Train RAG".format(epoch))
     for batch in dataloader:
         input_ids, attention_mask, labels = [b.to(args.device) for b in batch]
 
         question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
-        context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, faissIndex, cluster_centers, cluster_assignments,indexes, cluster_global_indices,args)
+        context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, cluster_centers,indexes, cluster_global_indices,args)
         outputs = model(input_ids=input_ids, 
                         attention_mask=attention_mask,
                         labels=labels, 
@@ -88,7 +88,7 @@ def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, faissIndex
         progress_bar.set_postfix(loss=loss.item())
         progress_bar.update(1)
 
-def val_RAG(dataloader, model, tokenizer, epoch, corpus, faissIndex, args):
+def val_RAG(dataloader, model, tokenizer, epoch, corpus, args):
     model.eval()
     total_loss = 0.0
     
@@ -97,7 +97,7 @@ def val_RAG(dataloader, model, tokenizer, epoch, corpus, faissIndex, args):
             input_ids, attention_mask, labels = [b.to(args.device) for b in batch]
 
             question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
-            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, faissIndex, args)
+            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, args)
             outputs = model(input_ids=input_ids, 
                             attention_mask=attention_mask,
                             labels=labels, 

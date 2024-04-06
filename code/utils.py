@@ -275,7 +275,7 @@ def cluster_embeddings_with_faiss(embeddings, n_clusters=100):
         indexes[cluster_id] = index
         cluster_global_indices[cluster_id] = in_cluster
     
-    return kmeans, cluster_centers, cluster_assignments.flatten(),indexes, cluster_global_indices
+    return cluster_centers, indexes, cluster_global_indices
 
 def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
     """
