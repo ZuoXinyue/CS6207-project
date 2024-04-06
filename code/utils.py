@@ -23,7 +23,7 @@ def load_args():
     parser.add_argument('--dataset_name', type=str, default="rajpurkar/squad_v2", help="The name of dataset from huggingface")
     parser.add_argument('--vec_database_path', type=str, default="../database_embed", help="The path of the vectorized database")
     parser.add_argument("--init_database_name", type=str, default="initial_retrieve_database", help="The name of the initial database")
-    parser.add_argument("--batch_size", type=int, default=1, help="The batch size for training")
+    parser.add_argument("--batch_size", type=int, default=3, help="The batch size for training")
     parser.add_argument("--n_docs", type=int, default=5, help="The number of documents to retrieve")
     parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
     parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
@@ -304,4 +304,4 @@ def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
         # Get the indices of the clusters with the smallest distances to the query
         closest_clusters = np.argsort(distances)[:num_clusters]
         all_closest_clusters.append(closest_clusters)
-    return closest_clusters
+    return all_closest_clusters
