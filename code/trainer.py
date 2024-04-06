@@ -125,6 +125,7 @@ def retrieve(query_embeddings, tokenizer, corpus, cluster_centers, indexes, clus
 
 
 def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
+    print('args.device',args.device)
     model.train()
     progress_bar = tqdm(dataloader, desc="Epoch {} Train RAG".format(epoch))
     for batch in dataloader:

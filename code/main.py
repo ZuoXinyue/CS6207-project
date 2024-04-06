@@ -3,7 +3,7 @@ import logging
 
 
 from datasets import load_dataset
-from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean, cluster_embeddings_with_faiss,save_model
+from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean, cluster_embeddings_with_faiss, cluster_embeddings_with_dbscan,cluster_embeddings_with_hierarchical, save_model
 from trainer import train_RAG, val_RAG
 from transformers import AdamW
 from autoencoder import Autoencoder
@@ -36,7 +36,13 @@ def main():
     embeddings = torch.tensor(database['embeddings']).numpy()
     # Clustering embeddings
     
-    cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
+    if args.cluster == 'DBSCAN':
+        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.n_clusters)
+    elif args.cluster == 'hierarchical':
+        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
+    else:
+        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
+        
 
     
     if args.debug_mode:
@@ -65,7 +71,7 @@ def main():
         autoencoder.train_model(dataloader_train, dataloader_val, model, epoch, args)
         
         # 3. Update database
-        save_model(epoch, model, autoencoder)
+        save_model(epoch, model, autoencoder, args)
 
     
 if __name__ == "__main__":

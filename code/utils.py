@@ -12,6 +12,7 @@ from enum import Enum, EnumMeta
 from faiss import Kmeans, IndexFlatL2
 import numpy as np
 import logging
+from sklearn.cluster import DBSCAN, AgglomerativeClustering
 
 
 warnings.filterwarnings('ignore')
@@ -35,6 +36,7 @@ def load_args():
     parser.add_argument("--latent_dim", type=int, default=128, help="The latent dimension of the autoencoder")
     parser.add_argument("--num_relevant_clusters", type=int, default=1, help="Number of relevant clusters to retrieve")
     parser.add_argument("--n_clusters", type=int, default=100, help="Number of Cluster")
+    parser.add_argument("--cluster", type=str, default='kmeans', choices=["kmeans",'DBSCAN',"hierarchical"],help="Cluster Strategy")
     parser.add_argument('--debug_mode', action='store_true',
                         help="debug mode")
     
@@ -266,19 +268,110 @@ def cluster_embeddings_with_faiss(embeddings, n_clusters=100):
     cluster_global_indices = {}
     
     for cluster_id in range(n_clusters):
-        # 找出属于当前聚类的文档索引
         in_cluster = np.where(cluster_assignments == cluster_id)[0]
         
-        # 为当前聚类创建FAISS索引
+        # FAISS
         cluster_embeddings = embeddings[in_cluster]
         index = faiss.IndexFlatL2(d)
         index.add(cluster_embeddings)
         
-        # 保存索引和全局索引
+        # local index and global index
         indexes[cluster_id] = index
         cluster_global_indices[cluster_id] = in_cluster
     
     return cluster_centers, indexes, cluster_global_indices
+
+
+def cluster_embeddings_with_dbscan(embeddings, eps=0.5, min_samples=5):
+    """
+    Cluster embeddings using DBSCAN.
+    
+    Args:
+    - embeddings: 2D numpy array of shape (num_documents, embedding_size).
+    - eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+    - min_samples: The number of samples in a neighborhood for a point to be considered as a core point.
+    
+    Returns:
+    - cluster_centers: The centroids of the clusters, numpy array.
+    - indexes: A dictionary of FAISS indexes for each cluster.
+    - cluster_global_indices: A dictionary mapping cluster IDs to document indices in the original dataset.
+    """
+    print("Using DBSCAN...")
+    # DBSCAN
+    clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(embeddings)
+    labels = clustering.labels_
+    
+    # cluster center
+    unique_labels = set(labels)
+    cluster_centers = []
+    for label in unique_labels:
+        if label == -1:
+            continue  # ignore noise
+        cluster_mask = (labels == label)
+        cluster_embeddings = embeddings[cluster_mask]
+        cluster_center = cluster_embeddings.mean(axis=0)
+        cluster_centers.append(cluster_center)
+    cluster_centers = np.array(cluster_centers)
+    
+    d = embeddings.shape[1]  # Dimension of each vector
+    indexes = {}
+    cluster_global_indices = {}
+    
+    for label in unique_labels:
+        if label == -1:
+            continue  # ignore noise
+        in_cluster = np.where(labels == label)[0]
+        
+        cluster_embeddings = embeddings[in_cluster]
+        index = faiss.IndexFlatL2(d)
+        index.add(cluster_embeddings.astype(np.float32))
+        
+        indexes[label] = index
+        cluster_global_indices[label] = in_cluster
+    
+    return cluster_centers, indexes, cluster_global_indices
+
+
+def cluster_embeddings_with_hierarchical(embeddings, n_clusters=100):
+    """
+    Cluster embeddings using Hierarchical Clustering.
+    
+    Args:
+    - embeddings: 2D numpy array of shape (num_documents, embedding_size).
+    - n_clusters: The number of clusters to form.
+    
+    Returns:
+    - cluster_centers: The centroids of the clusters, numpy array.
+    - indexes: A dictionary of FAISS indexes for each cluster.
+    - cluster_global_indices: A dictionary mapping cluster IDs to document indices in the original dataset.
+    """
+    print("Using hierarchical...")
+    # hierarchical
+    clustering = AgglomerativeClustering(n_clusters=n_clusters).fit(embeddings)
+    labels = clustering.labels_
+    
+    # center
+    unique_labels = set(labels)
+    cluster_centers = np.array([embeddings[labels == label].mean(axis=0) for label in unique_labels])
+    
+    # FAISS
+    d = embeddings.shape[1]  # Dimension of each vector
+    indexes = {}
+    cluster_global_indices = {}
+    
+    for label in unique_labels:
+        in_cluster = np.where(labels == label)[0]
+        
+        cluster_embeddings = embeddings[in_cluster]
+        index = faiss.IndexFlatL2(d)
+        index.add(cluster_embeddings.astype(np.float32))
+        
+        indexes[label] = index
+        cluster_global_indices[label] = in_cluster
+    
+    return cluster_centers, indexes, cluster_global_indices
+
+
 
 def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
     """
@@ -310,17 +403,17 @@ def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
     return all_closest_clusters
 
 
-def save_model(epoch, model, autoencoder, save_dir="./results"):
-    # 确保保存目录存在
+def save_model(epoch, model, autoencoder, args, save_dir="./results"):
+    # dir
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    # 保存RAG模型的状态
-    model_save_path = os.path.join(save_dir, f"rag_model_epoch_{epoch}.bin")
+    # save RAG
+    model_save_path = os.path.join(save_dir, f"rag_model_{args.cluster}_epoch_{epoch}.bin")
     torch.save(model.state_dict(), model_save_path)
     # logger.info(f"RAG model saved to {model_save_path}")
 
-    # 保存自动编码器的状态
-    autoencoder_save_path = os.path.join(save_dir, f"autoencoder_epoch_{epoch}.bin")
+    # save autoencoder
+    autoencoder_save_path = os.path.join(save_dir, f"autoencoder_{args.cluster}_epoch_{epoch}.bin")
     torch.save(autoencoder.state_dict(), autoencoder_save_path)
     # logger.info(f"Autoencoder model saved to {autoencoder_save_path}")  
