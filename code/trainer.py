@@ -163,7 +163,7 @@ def val_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexe
                             context_input_ids=context_input_ids, 
                             context_attention_mask=context_attention_mask,
                             doc_scores=doc_scores)
-            
-            total_loss += outputs.loss.item()
+            scalar_loss = outputs.loss.mean()
+            total_loss += scalar_loss.loss.item()
     avg_loss = total_loss / len(dataloader)
     print(f'Epoch {epoch+1}, RAG Validation Loss: {avg_loss}')
