@@ -88,7 +88,7 @@ def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, cluster_ce
         progress_bar.set_postfix(loss=loss.item())
         progress_bar.update(1)
 
-def val_RAG(dataloader, model, tokenizer, epoch, corpus, args):
+def val_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
     model.eval()
     total_loss = 0.0
     
@@ -97,7 +97,7 @@ def val_RAG(dataloader, model, tokenizer, epoch, corpus, args):
             input_ids, attention_mask, labels = [b.to(args.device) for b in batch]
 
             question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
-            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, args)
+            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus,cluster_centers, indexes,cluster_global_indices, args)
             outputs = model(input_ids=input_ids, 
                             attention_mask=attention_mask,
                             labels=labels, 

@@ -54,7 +54,7 @@ def main():
     for epoch in range(args.epoch_num):
         # 1. Train a RAG langauge model
         train_RAG(dataloader_train, model, tokenizer, optimizer, epoch, corpus, cluster_centers, indexes, cluster_global_indices, args)
-        val_RAG(dataloader_val, model, tokenizer, epoch, corpus, args)
+        val_RAG(dataloader_val, model, tokenizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args)
         
         # 2. Train an auto-encoder
         autoencoder.train_model(dataloader_train, dataloader_val, model, epoch, args)
