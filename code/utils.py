@@ -9,9 +9,10 @@ from torch.utils.data import DataLoader, ConcatDataset
 from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
 from argparse import ArgumentParser
 from enum import Enum, EnumMeta
-import logging
 from faiss import Kmeans, IndexFlatL2
 import numpy as np
+import logging
+
 
 warnings.filterwarnings('ignore')
 
@@ -28,7 +29,7 @@ def load_args():
     parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
     parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
     parser.add_argument("--learning_rate", type=float, default=1e-5, help="The learning rate for training")
-    parser.add_argument("--epoch_num", type=int, default=100, help="The number of epochs for training")
+    parser.add_argument("--epoch_num", type=int, default=1, help="The number of epochs for training")
     parser.add_argument("--debug_model", type=bool, default=True, help="Whether to use a debug model")
     parser.add_argument("--input_dim", type=int, default=768, help="The input dimension of the autoencoder")
     parser.add_argument("--latent_dim", type=int, default=128, help="The latent dimension of the autoencoder")
@@ -307,3 +308,19 @@ def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
         closest_clusters = np.argsort(distances)[:num_clusters]
         all_closest_clusters.append(closest_clusters)
     return all_closest_clusters
+
+
+def save_model(epoch, model, autoencoder, save_dir="./results"):
+    # 确保保存目录存在
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    # 保存RAG模型的状态
+    model_save_path = os.path.join(save_dir, f"rag_model_epoch_{epoch}.bin")
+    torch.save(model.state_dict(), model_save_path)
+    # logger.info(f"RAG model saved to {model_save_path}")
+
+    # 保存自动编码器的状态
+    autoencoder_save_path = os.path.join(save_dir, f"autoencoder_epoch_{epoch}.bin")
+    torch.save(autoencoder.state_dict(), autoencoder_save_path)
+    # logger.info(f"Autoencoder model saved to {autoencoder_save_path}")  

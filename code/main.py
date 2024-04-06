@@ -3,11 +3,11 @@ import logging
 
 
 from datasets import load_dataset
-from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean, cluster_embeddings_with_faiss
+from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean, cluster_embeddings_with_faiss,save_model
 from trainer import train_RAG, val_RAG
 from transformers import AdamW
 from autoencoder import Autoencoder
-
+import os
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
@@ -65,7 +65,8 @@ def main():
         autoencoder.train_model(dataloader_train, dataloader_val, model, epoch, args)
         
         # 3. Update database
-    
+        save_model(epoch, model, autoencoder)
+
     
 if __name__ == "__main__":
     main()
