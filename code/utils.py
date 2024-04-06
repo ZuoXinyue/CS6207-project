@@ -10,6 +10,8 @@ from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
 from argparse import ArgumentParser
 from enum import Enum, EnumMeta
 import logging
+from faiss import Kmeans, IndexFlatL2
+import numpy as np
 
 warnings.filterwarnings('ignore')
 
@@ -30,6 +32,8 @@ def load_args():
     parser.add_argument("--debug_model", type=bool, default=True, help="Whether to use a debug model")
     parser.add_argument("--input_dim", type=int, default=768, help="The input dimension of the autoencoder")
     parser.add_argument("--latent_dim", type=int, default=128, help="The latent dimension of the autoencoder")
+    parser.add_argument("--num_relevant_clusters", type=int, default=1, help="Number of relevant clusters to retrieve")
+    parser.add_argument("--n_clusters", type=int, default=100, help="Number of Cluster")
     
     
     
@@ -96,6 +100,7 @@ def get_embedding(input_text: Union[str, list[str]], tokenizer: RagTokenizer, mo
         all_embeddings.append(batch_embeddings.detach().cpu())
     embeddings = torch.cat(all_embeddings, dim=0)
     return embeddings
+
 
 def split_text_into_hunks(text: str, tokenizer: RagTokenizer) -> list[str]:
     tokens = tokenizer.question_encoder(text, add_special_tokens=False).input_ids
@@ -225,3 +230,78 @@ def fill_from_args(defaults):
     except AttributeError:
         pass
     return defaults
+
+
+
+
+def cluster_embeddings_with_faiss(embeddings, n_clusters=100):
+    """
+    Cluster embeddings using FAISS KMeans.
+    
+    Args:
+    - embeddings: 2D numpy array of shape (num_documents, embedding_size).
+    - n_clusters: The number of clusters to form.
+    
+    Returns:
+    - kmeans: The FAISS KMeans object after fitting.
+    - cluster_centers: The centroids of the clusters, numpy array of shape (n_clusters, embedding_size).
+    - cluster_assignments: Index of the cluster each sample belongs to, numpy array of shape (num_documents,).
+    """
+    d = embeddings.shape[1]  # Dimension of each vector
+    kmeans = faiss.Kmeans(d, n_clusters, nredo=10)
+    kmeans.train(embeddings.astype(np.float32))
+    
+    # The cluster centers (centroids)
+    cluster_centers = kmeans.centroids
+    # To get the cluster assignment for each document
+    _, cluster_assignments = kmeans.index.search(embeddings.astype(np.float32), 1)
+    
+
+    
+    # Create a FAISS index for each cluster
+    indexes = {}    
+    cluster_global_indices = {}
+    
+    for cluster_id in range(n_clusters):
+        # 找出属于当前聚类的文档索引
+        in_cluster = np.where(cluster_assignments == cluster_id)[0]
+        
+        # 为当前聚类创建FAISS索引
+        cluster_embeddings = embeddings[in_cluster]
+        index = faiss.IndexFlatL2(d)
+        index.add(cluster_embeddings)
+        
+        # 保存索引和全局索引
+        indexes[cluster_id] = index
+        cluster_global_indices[cluster_id] = in_cluster
+    
+    return kmeans, cluster_centers, cluster_assignments.flatten(),indexes, cluster_global_indices
+
+def get_relevant_clusters(query_embeddings, cluster_centers, num_clusters=1):
+    """
+    Identify the most relevant cluster(s) for a query embedding.
+    
+    Args:
+    - query_embeddings: The embedding of the query, shape (batch_size, embedding_dim).
+    - cluster_centers: The centroids of the clusters, shape (num_clusters, embedding_dim).
+    - num_clusters: Number of relevant clusters to retrieve.
+    
+    Returns:
+    - Indices of the top `num_clusters` closest clusters to the query embedding.
+    """
+    # # Calculate distances from the query to each cluster center
+    # distances = np.linalg.norm(cluster_centers - query_embedding, axis=1)
+    # # Get the indices of the clusters with the smallest distances to the query
+    # closest_clusters = np.argsort(distances)[:num_clusters]
+    all_closest_clusters = []
+    for query_embedding in query_embeddings:
+        # Ensure query_embedding is 2D for consistent broadcasting
+        query_embedding = query_embedding.reshape(1, -1)
+        
+        # Calculate distances from the query to each cluster center
+        distances = np.linalg.norm(cluster_centers - query_embedding, axis=1)
+        
+        # Get the indices of the clusters with the smallest distances to the query
+        closest_clusters = np.argsort(distances)[:num_clusters]
+        all_closest_clusters.append(closest_clusters)
+    return closest_clusters
