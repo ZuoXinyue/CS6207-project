@@ -57,7 +57,7 @@ class Autoencoder(nn.Module):
             progress_bar.update(1)
 
         val_loss = self.inference(val_loader, rag_model, criterion, args)
-        print(f'Epoch {epoch+1}, AE Validation Loss: {val_loss}')
+        # print(f'Epoch {epoch+1}, AE Validation Loss: {val_loss}')
 
     def inference(self, data_loader, rag_model, criterion, args):
         total_loss = 0.0

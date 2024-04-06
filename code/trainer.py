@@ -145,7 +145,8 @@ def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, cluster_ce
         loss.backward()
         optimizer.step()
         progress_bar.set_postfix(loss=loss.item())
-        progress_bar.update(1)
+        progress_bar.update(1)   
+    print(f'Epoch {epoch+1}, RAG Training Loss: {loss.item()}')
 
 def val_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
     model.eval()

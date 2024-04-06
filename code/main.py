@@ -35,12 +35,17 @@ def main():
     
     embeddings = torch.tensor(database['embeddings']).numpy()
     # Clustering embeddings
+    
     cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
     
-    # load dataset
-    dataset_train = clean(load_dataset(args.dataset_name, split='train[:500]' if args.debug_model else 'train'))
-    dataset_val = clean(load_dataset(args.dataset_name, split='validation[:500]' if args.debug_model else 'validation'))
+    if args.debug_mode:
+        dataset_train = clean(load_dataset(args.dataset_name, split='train[:50]' if args.debug_model else 'train'))
+        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:50]' if args.debug_model else 'validation'))
+    else:
+        # load dataset
+        dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_model else 'train'))
+        dataset_val = clean(load_dataset(args.dataset_name, split='validation' if args.debug_model else 'validation'))
     # dataset_test = load_dataset(args.dataset_name, split='test[:500]' if args.debug_model else 'test')
     logger.info(f"# Training samples: {len(dataset_train)}")
     logger.info(f"# Validation samples: {len(dataset_val)}")

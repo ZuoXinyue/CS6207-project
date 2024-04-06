@@ -28,12 +28,14 @@ def load_args():
     parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
     parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
     parser.add_argument("--learning_rate", type=float, default=1e-5, help="The learning rate for training")
-    parser.add_argument("--epoch_num", type=int, default=10, help="The number of epochs for training")
+    parser.add_argument("--epoch_num", type=int, default=100, help="The number of epochs for training")
     parser.add_argument("--debug_model", type=bool, default=True, help="Whether to use a debug model")
     parser.add_argument("--input_dim", type=int, default=768, help="The input dimension of the autoencoder")
     parser.add_argument("--latent_dim", type=int, default=128, help="The latent dimension of the autoencoder")
     parser.add_argument("--num_relevant_clusters", type=int, default=1, help="Number of relevant clusters to retrieve")
     parser.add_argument("--n_clusters", type=int, default=100, help="Number of Cluster")
+    parser.add_argument('--debug_mode', action='store_true',
+                        help="debug mode")
     
     
     
