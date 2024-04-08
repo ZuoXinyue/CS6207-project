@@ -74,16 +74,18 @@ from transformers import (
 #             context_attention_mask.to(args.device), \
 #             doc_scores \
 
-def retrieve(query_embeddings, tokenizer, corpus, cluster_centers, indexes, cluster_global_indices, args):
+def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, indexes, cluster_global_indices, args):
     batch_size = query_embeddings.size(0)
     question_hidden_states_np = query_embeddings.cpu().detach().numpy()
-    
+
     all_context_input_ids = []
     all_context_attention_mask = []
     all_doc_scores = []
     
     for query_idx in range(batch_size):
         # 对每个查询嵌入找到最相关的聚类
+        question_text = tokenizer.decode(input_ids[query_idx], skip_special_tokens=True)
+        print("\nOriginal Question:", question_text)
         relevant_clusters = get_relevant_clusters(question_hidden_states_np[query_idx:query_idx+1], cluster_centers, num_clusters=args.num_relevant_clusters)
         
         query_doc_ids = []
@@ -104,6 +106,7 @@ def retrieve(query_embeddings, tokenizer, corpus, cluster_centers, indexes, clus
         context_attention_mask = []
         for idx in query_doc_ids:
             doc = corpus[idx]
+            print("Retrieved text:", idx, ":::",doc)  # 打印检索到的文本
             encoded_doc = tokenizer(doc, max_length=args.max_input_length, padding='max_length', truncation=True, return_tensors="pt")
             context_input_ids.append(encoded_doc['input_ids'].squeeze(0))
             context_attention_mask.append(encoded_doc['attention_mask'].squeeze(0))
@@ -123,7 +126,33 @@ def retrieve(query_embeddings, tokenizer, corpus, cluster_centers, indexes, clus
     
     return context_input_ids.to(args.device), context_attention_mask.to(args.device), doc_scores.to(args.device)
 
+def test_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
+    model.eval()
+    
+    outputs = []
+    generated_texts = []
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Epoch {} Test RAG".format(epoch)):
+            input_ids, attention_mask, labels = [b.to(args.device) for b in batch]
 
+            question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
+            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, input_ids, tokenizer, corpus,cluster_centers, indexes,cluster_global_indices, args)
+            output = model.generate(input_ids=input_ids, 
+                            attention_mask=attention_mask,
+                            labels=labels, 
+                            context_input_ids=context_input_ids, 
+                            context_attention_mask=context_attention_mask,
+                            doc_scores=doc_scores,
+                            num_beams=1)
+            print('output',output.shape,output)
+            outputs.append(output)
+           
+            for ids in output:
+                decoded_text = tokenizer.decode(ids, skip_special_tokens=True)
+                generated_texts.append(decoded_text)
+                print('Generated text:', generated_texts)
+        return generated_texts
+            
 def train_RAG(dataloader, model, tokenizer, optimizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
     print('args.device',args.device)
     model.train()

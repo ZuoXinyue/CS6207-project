@@ -84,7 +84,7 @@ def test(model_path):
     tokenizer, model = load_model(args)
     # model.load_state_dict(torch.load(model_path))
     model.config.question_encoder.max_position_embeddings = args.max_input_length
-    # optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     
     # load database
     database = load_from_split_database(args.vec_database_path, args.init_database_name)
