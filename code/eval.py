@@ -51,7 +51,7 @@ def test():
     
     logger.info(f"# Validation samples: {len(dataset_train)}")
     #### from rag model load embeddings
-    rag_model, rag_tokenizer, corpus, cluster_centers, indexes,cluster_global_indices = get_rag()
+    rag_model, rag_tokenizer = get_rag()
     dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_train, rag_tokenizer, False, args)
     
     question_answerer = pipeline(
@@ -118,27 +118,8 @@ def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/
     tokenizer, model = load_model(args)
     # model.load_state_dict(torch.load(model_path))
     model.config.question_encoder.max_position_embeddings = args.max_input_length
-    
-    model.to(args.device)  # 将模型移动到选择的设备
-
-    # optimizer = AdamW(model.parameters(), lr=args.learning_rate)
-    
-    # load database
-    database = load_from_split_database(args.vec_database_path, args.init_database_name)
-    # indexing the database
-    corpus = database["text"]
-    
-    embeddings = torch.tensor(database['embeddings']).numpy()
-    # Clustering embeddings
-    
-    if args.cluster == 'DBSCAN':
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.n_clusters)
-    elif args.cluster == 'hierarchical':
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
-    else:
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
-    
-    return model, tokenizer, corpus, cluster_centers, indexes,cluster_global_indices
+    model.to(args.device)  # 将模型移动到选择的设备    
+    return model, tokenizer
     
     
     # bleu score between prediction & ground truth
