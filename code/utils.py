@@ -26,7 +26,7 @@ def load_args():
     parser.add_argument('--vec_database_path', type=str, default="../database_embed", help="The path of the vectorized database")
     parser.add_argument("--init_database_name", type=str, default="initial_retrieve_database", help="The name of the initial database")
     parser.add_argument("--batch_size", type=int, default=1, help="The batch size for training")
-    parser.add_argument("--n_docs", type=int, default=2, help="The number of documents to retrieve")
+    parser.add_argument("--n_docs", type=int, default=5, help="The number of documents to retrieve")
     parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
     parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
     parser.add_argument("--learning_rate", type=float, default=1e-5, help="The learning rate for training")

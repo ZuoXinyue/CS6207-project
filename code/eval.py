@@ -1,12 +1,15 @@
 import torch
 import logging
 
-
+import re
 from datasets import load_dataset
 from utils import load_args, load_model, load_from_split_database, index_database, dataset_2_dataloader, clean, cluster_embeddings_with_faiss, cluster_embeddings_with_dbscan,cluster_embeddings_with_hierarchical, save_model
 from trainer import train_RAG, test_RAG, val_RAG
 from transformers import AdamW
 from autoencoder import Autoencoder
+from nltk.translate.bleu_score import sentence_bleu
+from nltk.tokenize import word_tokenize
+
 import os
 import time
 from utils import get_relevant_clusters
@@ -15,12 +18,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
 
+
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
 logger = logging.getLogger(__name__)
 
-            
+def contains_hash(text):
+    """检查文本中是否包含#号"""
+    return '#' in text
 
 def test():
     args = load_args()
@@ -40,13 +46,13 @@ def test():
     else:
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
-    dataset_train = clean(load_dataset(args.dataset_name, split='train[:200]' if args.debug_mode else 'train'))
-    dataset_val = clean(load_dataset(args.dataset_name, split='validation[:200]' if args.debug_mode else 'validation'))
+    dataset_train = clean(load_dataset(args.dataset_name, split='train[:20]' if args.debug_mode else 'train'))
+    # dataset_val = clean(load_dataset(args.dataset_name, split='validation[:10]' if args.debug_mode else 'validation'))
     
-    logger.info(f"# Validation samples: {len(dataset_val)}")
+    logger.info(f"# Validation samples: {len(dataset_train)}")
     #### from rag model load embeddings
     rag_model, rag_tokenizer, corpus, cluster_centers, indexes,cluster_global_indices = get_rag()
-    dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_val, rag_tokenizer, False, args)
+    dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_train, rag_tokenizer, False, args)
     
     question_answerer = pipeline(
     "question-answering", model=model, tokenizer=tokenizer)
@@ -78,15 +84,34 @@ def test():
     print("outputs",len(outputs),outputs)
     print("golds",len(golds),golds)
     em_count = 0
+    right_num_answer = 0
+    removed = 0
     for i, preds in enumerate(outputs):
         gold = golds[i][0]  # 假设每个问题只有一个“正确答案”
         pred_text = preds['answer']
-        if pred_text.strip() in gold:
-                print("iii",i)
-                em_count += 1
-    print(f"Exact Match: {em_count}/{len(outputs)}")
+        gold = gold.lower()
+        pred_text = pred_text.lower()
+        
+        #     # 检查文本是否包含特殊字符
+        if contains_hash(pred_text):
+            removed +=1
+            continue  # 如果任一文本包含特殊字符，则跳过这一对
+        
+        # Tokenizing the texts
+        gold_tokenized = [word_tokenize(gold)]
+        pred_text_tokenized = word_tokenize(pred_text)
 
-def get_rag(model_path=''):
+        # 计算 BLEU 分数
+        bleu_score = sentence_bleu(gold_tokenized, pred_text_tokenized)
+        if bleu_score > 0:
+            right_num_answer +=1
+        print("gold:",gold,"pred_text:",pred_text,'BLEU score:',bleu_score,'E SAME?',pred_text.strip() in gold)
+        if pred_text.strip() in gold:
+                em_count += 1
+    print(f"Exact Match: {em_count}/{(len(outputs)-removed)}")
+    print(f"Right Answer: {right_num_answer}/{(len(outputs)-removed)}")
+
+def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/rag_model_DBSCAN_epoch_2.bin'):
     args = load_args()
     logger.info(f"args: {args}")
     # load model

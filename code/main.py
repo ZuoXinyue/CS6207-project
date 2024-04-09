@@ -46,15 +46,17 @@ def test(model_path):
     else:
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
-    dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
-    # dataset_val = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
+    # dataset_val = clean(load_dataset(args.dataset_name, split='validation[:10]' if args.debug_mode else 'validation'))
+    dataset_val = clean(load_dataset(args.dataset_name, split='train[:20]' if args.debug_mode else 'train'))
     logger.info(f"# Validation samples: {len(dataset_val)}")
-    dataloader_val = dataset_2_dataloader(dataset_val, tokenizer, False, args)
+    dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_val, tokenizer, False, args)
     
     faissIndex = index_database(torch.tensor(database['embeddings']))
-
+    
+    # for batch in tqdm(dataloader):
     predictions = test_RAG(dataloader_val, model, tokenizer, corpus, cluster_centers, indexes,cluster_global_indices,args, faissIndex)
-
+    # predictions = generated_texts
+    print("predictions",predictions)
     # EM between prediction & ground truth
     golds = [ex['answers'] for ex in dataset_val]
     em_count = 0
@@ -62,6 +64,7 @@ def test(model_path):
         if pred.strip() in gold:
             em_count += 1
     print(f"Exact Match: {em_count}/{len(predictions)}")
+    
 
             
 
@@ -128,58 +131,58 @@ def main():
         save_model(epoch, model, autoencoder, args)
 
 
-def test(model_path):
-    args = load_args()
-    logger.info(f"args: {args}")
+# def test(model_path):
+#     args = load_args()
+#     logger.info(f"args: {args}")
 
-    # load model
-    tokenizer, model = load_model(args)
-    # model.load_state_dict(torch.load(model_path))
-    model.config.question_encoder.max_position_embeddings = args.max_input_length
-    # optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+#     # load model
+#     tokenizer, model = load_model(args)
+#     model.load_state_dict(torch.load(model_path))
+#     model.config.question_encoder.max_position_embeddings = args.max_input_length
+#     # optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     
-    # load database
-    database = load_from_split_database(args.vec_database_path, args.init_database_name)
-    # indexing the database
-    corpus = database["text"]
+#     # load database
+#     database = load_from_split_database(args.vec_database_path, args.init_database_name)
+#     # indexing the database
+#     corpus = database["text"]
     
-    embeddings = torch.tensor(database['embeddings']).numpy()
-    # Clustering embeddings
+#     embeddings = torch.tensor(database['embeddings']).numpy()
+#     # Clustering embeddings
     
-    if args.cluster == 'DBSCAN':
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.n_clusters)
-    elif args.cluster == 'hierarchical':
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
-    else:
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
+#     if args.cluster == 'DBSCAN':
+#         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.n_clusters)
+#     elif args.cluster == 'hierarchical':
+#         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
+#     else:
+#         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
-    if args.debug_mode:
-        dataset_train = clean(load_dataset(args.dataset_name, split='train[:100]' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
-    else:
-        # load dataset
-        dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation' if args.debug_mode else 'validation'))
+#     if args.debug_mode:
+#         dataset_train = clean(load_dataset(args.dataset_name, split='train[:100]' if args.debug_mode else 'train'))
+#         dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
+#     else:
+#         # load dataset
+#         dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
+#         dataset_val = clean(load_dataset(args.dataset_name, split='validation' if args.debug_mode else 'validation'))
         
-    logger.info(f"# Validation samples: {len(dataset_train)}")
-    dataloader_val = dataset_2_dataloader(dataset_train, tokenizer, False, args)
+#     logger.info(f"# Validation samples: {len(dataset_train)}")
+#     dataloader_val = dataset_2_dataloader(dataset_train, tokenizer, False, args)
     
-    predictions = test_RAG(dataloader_val, model, tokenizer, 1, corpus, cluster_centers, indexes,cluster_global_indices,args)
-    print("predictions",predictions)
+#     predictions = test_RAG(dataloader_val, model, tokenizer, 1, corpus, cluster_centers, indexes,cluster_global_indices,args)
+#     print("predictions",predictions)
     
-    # EM between prediction & ground trut       
-    golds = [ex['answers'] for ex in dataset_val]
-    em_count = 0
-    for pred, gold in zip(predictions, golds):
-        if pred.strip() in gold:
-            em_count += 1
-    print(f"Exact Match: {em_count}/{len(predictions)}")
+#     # EM between prediction & ground trut       
+#     golds = [ex['answers'] for ex in dataset_val]
+#     em_count = 0
+#     for pred, gold in zip(predictions, golds):
+#         if pred.strip() in gold:
+#             em_count += 1
+#     print(f"Exact Match: {em_count}/{len(predictions)}")
     
-    # bleu score between prediction & ground truth
+#     # bleu score between prediction & ground truth
     
 
     
 if __name__ == "__main__":
     # main()
-    model_path = 'results/rag_model_epoch_2.bin'
+    model_path = '/home/yifan/projects/CS6207/CS6207-project/code/results/rag_model_DBSCAN_epoch_2.bin'
     test(model_path)
