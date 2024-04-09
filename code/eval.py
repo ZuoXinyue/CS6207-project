@@ -9,7 +9,7 @@ from transformers import AdamW
 from autoencoder import Autoencoder
 from nltk.translate.bleu_score import sentence_bleu
 from nltk.tokenize import word_tokenize
-
+from tqdm import tqdm
 import os
 import time
 from utils import get_relevant_clusters
@@ -58,14 +58,22 @@ def test():
     
     outputs = []
     answers_texts = []
+    em_count = 0
+    right_num_answer = 0
+    removed = 0
 
     t1 = time.time()
+    t_rr = 0
     for batch in dataloader_val:
+        
         input_ids, attention_mask, labels,idx_tensor = batch
         input_ids = input_ids.to(args.device)
         attention_mask = attention_mask.to(args.device)
         question_hidden_states = rag_model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
+        t1_r = time.time()
         context = retrieve(question_hidden_states, input_ids, rag_tokenizer, corpus, cluster_centers,indexes, cluster_global_indices,args)
+        t2_r = time.time()
+        t_rr += (t2_r-t1_r)
         
         batch_questions_text = [questions_text[i.item()] for i in idx_tensor]
         batch_answers_text = [answers_text[i.item()] for i in idx_tensor]
@@ -75,40 +83,59 @@ def test():
         concatenated_context = ''.join(context)
         output = question_answerer(question=batch_questions_text, context=concatenated_context)
         outputs.append(output)
-    t2 = time.time()
-    print("Time: ", t2-t1)
-
-    # EM between prediction & ground trut       
-    golds = answers_texts
-    print("outputs",len(outputs),outputs)
-    print("golds",len(golds),golds)
-    em_count = 0
-    right_num_answer = 0
-    removed = 0
-    for i, preds in enumerate(outputs):
-        gold = golds[i][0]  # 假设每个问题只有一个“正确答案”
-        pred_text = preds['answer']
-        gold = gold.lower()
-        pred_text = pred_text.lower()
         
-        #     # 检查文本是否包含特殊字符
+        gold = batch_answers_text[0]
+        pred_text = output['answer']
+        pred_text = pred_text.lower()
         if contains_hash(pred_text):
             removed +=1
             continue  # 如果任一文本包含特殊字符，则跳过这一对
-        
-        # Tokenizing the texts
         gold_tokenized = [word_tokenize(gold)]
         pred_text_tokenized = word_tokenize(pred_text)
-
-        # 计算 BLEU 分数
         bleu_score = sentence_bleu(gold_tokenized, pred_text_tokenized)
         if bleu_score > 0:
             right_num_answer +=1
-        print("gold:",gold,"pred_text:",pred_text,'BLEU score:',bleu_score,'E SAME?',pred_text.strip() in gold)
         if pred_text.strip() in gold:
                 em_count += 1
-    print(f"Exact Match: {em_count}/{(len(outputs)-removed)}")
-    print(f"Right Answer: {right_num_answer}/{(len(outputs)-removed)}")
+        print("gold:",gold,"pred_text:",pred_text,'BLEU score:',bleu_score,'E SAME?',pred_text.strip() in gold)
+        print(f"Exact Match: {em_count}/{(len(outputs)-removed)}, Right Answer: {right_num_answer}/{(len(outputs)-removed)}")
+        print(f"Current total retrieve: {t_rr}")
+
+        
+    t2 = time.time()
+    print("Time: ", t2-t1)
+
+    # # EM between prediction & ground trut       
+    # golds = answers_texts
+    # print("outputs",len(outputs),outputs)
+    # print("golds",len(golds),golds)
+    # em_count = 0
+    # right_num_answer = 0
+    # removed = 0
+    # for i, preds in enumerate(outputs):
+    #     gold = golds[i][0]  # 假设每个问题只有一个“正确答案”
+    #     pred_text = preds['answer']
+    #     gold = gold.lower()
+    #     pred_text = pred_text.lower()
+        
+    #     #     # 检查文本是否包含特殊字符
+    #     if contains_hash(pred_text):
+    #         removed +=1
+    #         continue  # 如果任一文本包含特殊字符，则跳过这一对
+        
+    #     # Tokenizing the texts
+    #     gold_tokenized = [word_tokenize(gold)]
+    #     pred_text_tokenized = word_tokenize(pred_text)
+
+    #     # 计算 BLEU 分数
+    #     bleu_score = sentence_bleu(gold_tokenized, pred_text_tokenized)
+    #     if bleu_score > 0:
+    #         right_num_answer +=1
+    #     print("gold:",gold,"pred_text:",pred_text,'BLEU score:',bleu_score,'E SAME?',pred_text.strip() in gold)
+    #     if pred_text.strip() in gold:
+    #             em_count += 1
+    # print(f"Exact Match: {em_count}/{(len(outputs)-removed)}")
+    # print(f"Right Answer: {right_num_answer}/{(len(outputs)-removed)}")
 
 def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/rag_model_DBSCAN_epoch_2.bin'):
     args = load_args()
@@ -146,7 +173,7 @@ def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, in
             # print('indexes[cluster_id]',indexes)
             cluster_id = cluster_id.item()
             if cluster_id in indexes:
-                print(f"Cluster {cluster_id} contains {indexes[cluster_id].ntotal} vectors")
+                # print(f"Cluster {cluster_id} contains {indexes[cluster_id].ntotal} vectors")
                 D, I = indexes[cluster_id].search(question_hidden_states_np[query_idx:query_idx+1], args.n_docs)
                 scores = 1.0 / (1.0 + D[0])
                 query_doc_scores.extend(scores.tolist())
