@@ -13,7 +13,6 @@ from nltk.tokenize import word_tokenize
 import os
 import time
 from utils import get_relevant_clusters
-import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
@@ -45,7 +44,7 @@ def test():
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
     else:
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
-
+    print("cluster_centers",cluster_centers.shape)
     dataset_train = clean(load_dataset(args.dataset_name, split='train[:20]' if args.debug_mode else 'train'))
     # dataset_val = clean(load_dataset(args.dataset_name, split='validation[:10]' if args.debug_mode else 'validation'))
     
@@ -123,6 +122,7 @@ def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/
     
     
     # bleu score between prediction & ground truth
+
      
 def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, indexes, cluster_global_indices, args):
     batch_size = query_embeddings.size(0)
@@ -132,18 +132,21 @@ def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, in
     all_context_attention_mask = []
     all_doc_scores = []
     
+    
     for query_idx in range(batch_size):
-        # 对每个查询嵌入找到最相关的聚类
-        question_text = tokenizer.decode(input_ids[query_idx], skip_special_tokens=True)
-        # print("\nOriginal Question:", question_text)
         relevant_clusters = get_relevant_clusters(question_hidden_states_np[query_idx:query_idx+1], cluster_centers, num_clusters=args.num_relevant_clusters)
+
         
         query_doc_ids = []
         query_doc_scores = []
-        
+        # 直接访问并打印特定cluster_id的向量个数    
         for cluster_id in relevant_clusters:
+            # print("relevant_clusters id",relevant_clusters)
+            # print('indexes',indexes)
+            # print('indexes[cluster_id]',indexes)
             cluster_id = cluster_id.item()
             if cluster_id in indexes:
+                print(f"Cluster {cluster_id} contains {indexes[cluster_id].ntotal} vectors")
                 D, I = indexes[cluster_id].search(question_hidden_states_np[query_idx:query_idx+1], args.n_docs)
                 scores = 1.0 / (1.0 + D[0])
                 query_doc_scores.extend(scores.tolist())
