@@ -5,7 +5,7 @@ import warnings
 from tqdm import tqdm
 from typing import Union
 from datasets import Dataset
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset,TensorDataset
 from transformers import RagTokenizer, RagRetriever, RagTokenForGeneration
 from argparse import ArgumentParser
 from enum import Enum, EnumMeta
@@ -25,7 +25,7 @@ def load_args():
     parser.add_argument('--dataset_name', type=str, default="rajpurkar/squad_v2", help="The name of dataset from huggingface")
     parser.add_argument('--vec_database_path', type=str, default="../database_embed", help="The path of the vectorized database")
     parser.add_argument("--init_database_name", type=str, default="initial_retrieve_database", help="The name of the initial database")
-    parser.add_argument("--batch_size", type=int, default=3, help="The batch size for training")
+    parser.add_argument("--batch_size", type=int, default=1, help="The batch size for training")
     parser.add_argument("--n_docs", type=int, default=5, help="The number of documents to retrieve")
     parser.add_argument("--max_input_length", type=int, default=256, help="The maximum length of input")
     parser.add_argument("--max_output_length", type=int, default=64, help="The maximum length of input")
@@ -56,26 +56,59 @@ def clean(dataset):
             
     return new_dataset
 
-def dataset_2_dataloader(dataset, tokenizer, shuffle: bool, args: ArgumentParser) -> DataLoader:
-    tensor_dataset_input = tokenizer([sample["question"] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_input_length, return_tensors='pt')
+# def dataset_2_dataloader(dataset, tokenizer, shuffle: bool, args: ArgumentParser) -> DataLoader:
+#     tensor_dataset_input = tokenizer([sample["question"] for sample in dataset], padding='max_length', truncation=True, max_length=args.max_input_length, return_tensors='pt')
     
-    tensor_dataset_output = tokenizer.generator([sample["answers"]["text"][0] for sample in dataset], 
+#     tensor_dataset_output = tokenizer.generator([sample["answers"]["text"][0] for sample in dataset], 
+#                                       padding='max_length', 
+#                                       truncation=True, 
+#                                     #   add_special_tokens=True,
+#                                       max_length=args.max_output_length, 
+#                                       return_tensors='pt')
+
+#     questions_text = [sample["question"] for sample in dataset]
+#     dataset = []
+#     for i in range(len(tensor_dataset_input["input_ids"])):
+#         dataset.append([
+#             tensor_dataset_input["input_ids"][i],
+#             tensor_dataset_input["attention_mask"][i],
+#             tensor_dataset_output["input_ids"][i]
+#         ])
+    
+#     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=shuffle)
+#     return dataloader,questions_text
+def dataset_2_dataloader(dataset, tokenizer, shuffle: bool, args):
+    # 编码问题文本
+    tensor_dataset_input = tokenizer([sample["question"] for sample in dataset], 
                                       padding='max_length', 
                                       truncation=True, 
-                                    #   add_special_tokens=True,
-                                      max_length=args.max_output_length, 
+                                      max_length=args.max_input_length, 
                                       return_tensors='pt')
     
-    dataset = []
-    for i in range(len(tensor_dataset_input["input_ids"])):
-        dataset.append([
-            tensor_dataset_input["input_ids"][i],
-            tensor_dataset_input["attention_mask"][i],
-            tensor_dataset_output["input_ids"][i]
-        ])
-    
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=shuffle)
-    return dataloader
+    # 编码答案文本
+    tensor_dataset_output = tokenizer([sample["answers"]["text"][0] for sample in dataset], 
+                                      padding='max_length', 
+                                      truncation=True, 
+                                      max_length=args.max_output_length, 
+                                      return_tensors='pt')
+
+    # 准备问题文本（原始文本，不是编码后的）
+    questions_text = [sample["question"] for sample in dataset]
+    # 准备答案文本（原始文本，不是编码后的）
+    answers_text = [sample["answers"]["text"][0] for sample in dataset]
+
+  
+
+    # 创建PyTorch的TensorDataset
+    dataset_tensor = TensorDataset(tensor_dataset_input["input_ids"], 
+                                   tensor_dataset_input["attention_mask"], 
+                                   tensor_dataset_output["input_ids"],
+                                   torch.arange(len(questions_text)))  # 索引作为额外的字段
+
+    # 使用DataLoader
+    dataloader = DataLoader(dataset_tensor, batch_size=args.batch_size, shuffle=shuffle)
+
+    return dataloader, questions_text,answers_text
 
 def index_database(embeddings: torch.tensor): 
     _, dim = embeddings.shape
