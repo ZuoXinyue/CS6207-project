@@ -6,6 +6,7 @@ from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler 
 from utils import get_relevant_clusters
 import numpy as np
+import time
 scaler = GradScaler()
 # from finetune_peft import get_peft_config, PEFTArguments
 from peft import (
@@ -126,6 +127,30 @@ def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, in
     
     return context_input_ids.to(args.device), context_attention_mask.to(args.device), doc_scores.to(args.device)
 
+# def retrieve(query_embedding, tokenizer, corpus, faissIndex, args):
+#     question_hidden_states_np = query_embedding.cpu().detach().numpy()
+    
+#     D, I = faissIndex.search(question_hidden_states_np,args.n_docs)  # n_docs the document number
+
+#     context_input_ids = []
+#     context_attention_mask = []
+#     for i in range(args.batch_size):
+#         doc_ids = I[i]  # 当前查询检索到的文档索引
+#         docs = [corpus[idx] for idx in doc_ids]  # the retrived doc
+#         for doc in docs:
+#             encoded_doc = tokenizer(doc, max_length=args.max_input_length, padding='max_length', truncation=True, return_tensors="pt")
+#             context_input_ids.append(encoded_doc['input_ids'])
+#             context_attention_mask.append(encoded_doc['attention_mask'])
+
+#     context_input_ids = torch.cat(context_input_ids, dim=0)
+#     context_attention_mask = torch.cat(context_attention_mask, dim=0)
+    
+#     # doc score just use the 1 / distance as the doc scores
+#     doc_scores = 1.0 / (1.0 + torch.tensor(D))
+
+#     return context_input_ids.to(args.device), \
+#             context_attention_mask.to(args.device), \
+#             doc_scores.to(args.device)
 def test_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexes,cluster_global_indices,args):
     model.eval()
     
@@ -198,3 +223,34 @@ def val_RAG(dataloader, model, tokenizer, epoch, corpus, cluster_centers, indexe
             total_loss += scalar_loss.item()
     avg_loss = total_loss / len(dataloader)
     print(f'Epoch {epoch+1}, RAG Validation Loss: {avg_loss}')
+
+def test_RAG(dataloader, model, tokenizer, corpus, cluster_centers, indexes,cluster_global_indices,args,faissIndex):
+    model.eval()
+    
+    outputs = []
+    generated_texts = []
+    with torch.no_grad():
+        t1 = time.time()
+        for batch in tqdm(dataloader):
+            input_ids, attention_mask, labels = [b.to(args.device) for b in batch]
+
+            question_hidden_states = model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
+            context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus,cluster_centers, indexes,cluster_global_indices, args)
+            # context_input_ids, context_attention_mask, doc_scores = retrieve(question_hidden_states, tokenizer, corpus, faissIndex, args)
+            output = model.generate(input_ids=input_ids, 
+                            attention_mask=attention_mask,
+                            labels=labels, 
+                            context_input_ids=context_input_ids, 
+                            context_attention_mask=context_attention_mask,
+                            doc_scores=doc_scores,
+                            num_beams=1)
+            # print('output',output.shape,output)
+            outputs.append(output)
+           
+            for ids in output:
+                decoded_text = tokenizer.decode(ids, skip_special_tokens=True)
+                generated_texts.append(decoded_text)
+                # print('Generated text:', generated_texts)
+        t2 = time.time()
+        print("Time: ", t2-t1)
+        return generated_texts

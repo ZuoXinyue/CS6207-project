@@ -81,12 +81,12 @@ def test():
                 em_count += 1
     print(f"Exact Match: {em_count}/{len(outputs)}")
 
-def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/rag_model_DBSCAN_epoch_2.bin'):
+def get_rag(model_path=''):
     args = load_args()
     logger.info(f"args: {args}")
     # load model
     tokenizer, model = load_model(args)
-    model.load_state_dict(torch.load(model_path))
+    # model.load_state_dict(torch.load(model_path))
     model.config.question_encoder.max_position_embeddings = args.max_input_length
     
     model.to(args.device)  # 将模型移动到选择的设备
