@@ -10,6 +10,8 @@ from autoencoder import Autoencoder
 import os
 from utils import get_relevant_clusters
 import tqdm
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -31,15 +33,15 @@ def test():
     corpus = database["text"]
     embeddings = torch.tensor(database['embeddings']).numpy()
     if args.cluster == 'DBSCAN':
-        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.n_clusters)
+        cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_dbscan(embeddings, args.min_samples)
     elif args.cluster == 'hierarchical':
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_hierarchical(embeddings, args.n_clusters)
     else:
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
     if args.debug_mode:
-        dataset_train = clean(load_dataset(args.dataset_name, split='train[:30]' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:30]' if args.debug_mode else 'validation'))
+        dataset_train = clean(load_dataset(args.dataset_name, split='train[:100]' if args.debug_mode else 'train'))
+        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
     else:
         # load dataset
         dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
@@ -61,11 +63,14 @@ def test():
         attention_mask = attention_mask.to(args.device)
         question_hidden_states = rag_model.question_encoder(input_ids=input_ids,attention_mask=attention_mask)[0]
         context = retrieve(question_hidden_states, input_ids, rag_tokenizer, corpus, cluster_centers,indexes, cluster_global_indices,args)
+        
         batch_questions_text = [questions_text[i.item()] for i in idx_tensor]
         batch_answers_text = [answers_text[i.item()] for i in idx_tensor]
+        # context = retrieve_with_tfidf(input_ids, batch_questions_text, corpus,args)
         answers_texts.append(batch_answers_text)
         # print("context",context[0] )
-        output = question_answerer(question=batch_questions_text, context=context[0])
+        concatenated_context = ''.join(context)
+        output = question_answerer(question=batch_questions_text, context=concatenated_context)
         outputs.append(output)
     
     # EM between prediction & ground trut       
@@ -164,6 +169,36 @@ def retrieve(query_embeddings, input_ids, tokenizer, corpus, cluster_centers, in
         doc_scores = doc_scores.unsqueeze(0)  # 如果是一维，增加一个批次维度
     doc_scores = doc_scores.view(batch_size, args.n_docs)
     return docs
+
+def retrieve_with_tfidf(input_ids, question_text, corpus, args):
+    batch_size = input_ids.size(0)
+    all_docs = []
+    
+    # Step 1: Compute TF-IDF for the corpus if not already computed
+    # Note: It's more efficient to do this once outside of this function if the corpus doesn't change often
+    tfidf_vectorizer = TfidfVectorizer(max_features=args.max_input_length)
+    corpus_tfidf = tfidf_vectorizer.fit_transform(corpus)
+    
+    
+    for query_idx in range(batch_size):
+        question_text = question_text[query_idx]
+        # Step 2: Decode the query and compute its TF-IDF representation
+        # question_text = tokenizer.decode(input_ids[query_idx], skip_special_tokens=True)
+        query_tfidf = tfidf_vectorizer.transform([question_text])
+        
+        # Step 3: Calculate cosine similarity between query TF-IDF and corpus TF-IDF
+        cosine_similarities = linear_kernel(query_tfidf, corpus_tfidf).flatten()
+        
+        # Step 4: Retrieve top N similar documents
+        top_doc_indices = cosine_similarities.argsort()[-args.n_docs:][::-1]
+        query_docs = [corpus[idx] for idx in top_doc_indices]
+        all_docs.extend(query_docs)
+        
+        # Optional: Print retrieved documents (for debugging)
+        # for idx in top_doc_indices:
+        #     print("Retrieved text:", idx, ":::", corpus[idx])
+        
+    return all_docs
  
 if __name__ == "__main__":
     # main()
