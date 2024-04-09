@@ -8,6 +8,7 @@ from trainer import train_RAG, test_RAG, val_RAG
 from transformers import AdamW
 from autoencoder import Autoencoder
 import os
+import time
 from utils import get_relevant_clusters
 import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -39,24 +40,21 @@ def test():
     else:
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
-    if args.debug_mode:
-        dataset_train = clean(load_dataset(args.dataset_name, split='train[:100]' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
-    else:
-        # load dataset
-        dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation' if args.debug_mode else 'validation'))
-        
-    logger.info(f"# Validation samples: {len(dataset_train)}")
+    dataset_train = clean(load_dataset(args.dataset_name, split='train[:200]' if args.debug_mode else 'train'))
+    dataset_val = clean(load_dataset(args.dataset_name, split='validation[:200]' if args.debug_mode else 'validation'))
+    
+    logger.info(f"# Validation samples: {len(dataset_val)}")
     #### from rag model load embeddings
     rag_model, rag_tokenizer, corpus, cluster_centers, indexes,cluster_global_indices = get_rag()
-    dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_train, rag_tokenizer, False, args)
+    dataloader_val, questions_text,answers_text = dataset_2_dataloader(dataset_val, rag_tokenizer, False, args)
     
     question_answerer = pipeline(
     "question-answering", model=model, tokenizer=tokenizer)
     
     outputs = []
     answers_texts = []
+
+    t1 = time.time()
     for batch in dataloader_val:
         input_ids, attention_mask, labels,idx_tensor = batch
         input_ids = input_ids.to(args.device)
@@ -72,7 +70,9 @@ def test():
         concatenated_context = ''.join(context)
         output = question_answerer(question=batch_questions_text, context=concatenated_context)
         outputs.append(output)
-    
+    t2 = time.time()
+    print("Time: ", t2-t1)
+
     # EM between prediction & ground trut       
     golds = answers_texts
     print("outputs",len(outputs),outputs)
