@@ -102,8 +102,8 @@ def test(model_path):
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
     if args.debug_mode:
-        dataset_train = clean(load_dataset(args.dataset_name, split='train[:10]' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:10]' if args.debug_mode else 'validation'))
+        dataset_train = clean(load_dataset(args.dataset_name, split='train[:100]' if args.debug_mode else 'train'))
+        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:100]' if args.debug_mode else 'validation'))
     else:
         # load dataset
         dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))

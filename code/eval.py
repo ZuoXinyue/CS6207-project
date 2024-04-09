@@ -38,8 +38,8 @@ def test():
         cluster_centers, indexes,cluster_global_indices = cluster_embeddings_with_faiss(embeddings, args.n_clusters)
 
     if args.debug_mode:
-        dataset_train = clean(load_dataset(args.dataset_name, split='train[:10]' if args.debug_mode else 'train'))
-        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:10]' if args.debug_mode else 'validation'))
+        dataset_train = clean(load_dataset(args.dataset_name, split='train[:30]' if args.debug_mode else 'train'))
+        dataset_val = clean(load_dataset(args.dataset_name, split='validation[:30]' if args.debug_mode else 'validation'))
     else:
         # load dataset
         dataset_train = clean(load_dataset(args.dataset_name, split='train' if args.debug_mode else 'train'))
@@ -71,19 +71,15 @@ def test():
     # EM between prediction & ground trut       
     golds = answers_texts
     print("outputs",len(outputs),outputs)
+    print("golds",len(golds),golds)
     em_count = 0
     for i, preds in enumerate(outputs):
         gold = golds[i][0]  # 假设每个问题只有一个“正确答案”
-        if isinstance(preds, list):  # 处理返回多个答案的情况
-            pred_texts = [pred['answer'] for pred in preds]
-            # 如果任一预测答案在真实答案中，则认为是正确的
-            if any(pred_text.strip() in gold for pred_text in pred_texts):
+        pred_text = preds['answer']
+        if pred_text.strip() in gold:
+                print("iii",i)
                 em_count += 1
-        elif isinstance(preds, dict):  # 处理返回单个答案的情况
-            pred_text = preds['answer']
-            if pred_text.strip() in gold:
-                em_count += 1
-    print(f"Exact Match: {em_count}/{len(output)}")
+    print(f"Exact Match: {em_count}/{len(outputs)}")
 
 def get_rag(model_path='/home/yifan/projects/CS6207/CS6207-project/code/results/rag_model_DBSCAN_epoch_2.bin'):
     args = load_args()
